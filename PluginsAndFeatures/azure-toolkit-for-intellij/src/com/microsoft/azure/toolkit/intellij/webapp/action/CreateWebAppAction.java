@@ -52,6 +52,7 @@ import com.microsoft.tooling.msservices.helpers.Name;
 import com.microsoft.tooling.msservices.serviceexplorer.NodeActionEvent;
 import com.microsoft.tooling.msservices.serviceexplorer.NodeActionListener;
 import com.microsoft.tooling.msservices.serviceexplorer.azure.webapp.WebAppModule;
+import rx.Single;
 
 import java.nio.file.Path;
 import java.util.Objects;
@@ -71,62 +72,57 @@ public class CreateWebAppAction extends NodeActionListener {
     }
 
     @Override
-    @AzureOperation(value = "create web app", type = AzureOperation.Type.ACTION)
+    @AzureOperation(value = "open web app creation dialog", type = AzureOperation.Type.ACTION)
     public void actionPerformed(NodeActionEvent e) {
         final Project project = (Project) webappModule.getProject();
         if (!AzureSignInAction.doSignIn(AuthMethodManager.getInstance(), project) ||
             !AzureLoginHelper.isAzureSubsAvailableOrReportError(message("common.error.signIn"))) {
             return;
         }
-        this.openDialog(project, null);
-    }
-
-    private void openDialog(final Project project, @Nullable WebAppConfig config) {
-        final WebAppCreationDialog dialog = new WebAppCreationDialog(project);
+        final WebAppCreationDialog dialog = this.openDialog(project, null);
         dialog.setOkActionListener((data) -> {
-            this.createWebApp(data, project, dialog);
+            DefaultLoader.getIdeHelper().invokeLater(dialog::close);
+            this.createWebApp(data, project, dialog)
+                .subscribe(webapp -> {
+                    this.notifyCreationSuccess(webapp);
+                    this.refreshAzureExplorer();
+                }, (error) -> {
+                    final AzureExceptionAction action = AzureExceptionAction.simple("Reopen Web App Creation Dialog", t -> {
+                        AzureTaskManager.getInstance().runLater(() -> openDialog(project, data));
+                    });
+                    final ProgressIndicator indicator = ProgressManager.getInstance().getProgressIndicator();
+                    AzureExceptionHandler.notify(error, !indicator.isModal(), action);
+                });
         });
-        if (Objects.nonNull(config)) {
-            dialog.setData(config);
-        }
-        dialog.show();
     }
 
-    private void createWebApp(final WebAppConfig config, final Project project, final WebAppCreationDialog dialog) {
-        final AzureTask task = new AzureTask(null, message("webapp.create.task.title"), false, () -> {
+    @AzureOperation(value = "create web app", type = AzureOperation.Type.ACTION)
+    private Single<WebApp> createWebApp(final WebAppConfig config, final Project project, final WebAppCreationDialog dialog) {
+        final AzureTask<WebApp> task = new AzureTask<>(null, message("webapp.create.task.title"), false, () -> {
+            boolean test = true;
+            if (test) {
+                try {
+                    Thread.sleep(15000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                throw new RuntimeException("test");
+            }
             final ProgressIndicator indicator = ProgressManager.getInstance().getProgressIndicator();
             indicator.setIndeterminate(true);
-            final WebApp webapp = webappService.createWebApp(config);
-            refreshAzureExplorer();
-            final Path application = config.getApplication();
-            if (Objects.nonNull(application) && application.toFile().exists()) {
-                AzureTaskManager.getInstance().runLater(() -> deploy(webapp, application, project));
+            return webappService.createWebApp(config);
+        });
+        return AzureTaskManager.getInstance().runInModal(task).toSingle().doOnSuccess(webapp -> {
+            final Path artifact = config.getApplication();
+            if (Objects.nonNull(artifact) && artifact.toFile().exists()) {
+                AzureTaskManager.getInstance().runLater(() -> deploy(webapp, artifact, project));
             }
         });
-        task.setErrorListener((e) -> {
-            final AzureExceptionAction action = AzureExceptionAction.simple("Reopen Web App Creation Dialog", t -> {
-                AzureTaskManager.getInstance().runLater(() -> openDialog(project, config));
-            });
-            AzureExceptionHandler.notify(e, task.isRunningBackground(), action);
-        });
-        task.setSuccessListener(() -> {
-            DefaultLoader.getIdeHelper().invokeLater(dialog::close);
-            dialog.disposeIfNeeded();
-            this.notifyCreationSuccess(config);
-        });
-        AzureTaskManager.getInstance().runInModal(task);
-    }
-
-    private void notifyCreationSuccess(final WebAppConfig config) {
-        final String title = message("webapp.create.task.success.notification.title");
-        final String message = String.format(message("webapp.create.task.success.notification.message"), config.getName());
-        final Notification notification = new Notification(NOTIFICATION_GROUP_ID, title, message, NotificationType.INFORMATION);
-        Notifications.Bus.notify(notification);
     }
 
     @AzureOperation(value = "deploy artifact to web app", type = AzureOperation.Type.SERVICE)
     private void deploy(final WebApp webapp, final Path application, final Project project) {
-        final AzureTask task = new AzureTask(null, message("webapp.deploy.task.title"), true, () -> {
+        final AzureTask<Void> task = new AzureTask<>(null, message("webapp.deploy.task.title"), true, () -> {
             ProgressManager.getInstance().getProgressIndicator().setIndeterminate(true);
             final RunProcessHandler processHandler = new RunProcessHandler();
             processHandler.addDefaultListener();
@@ -145,5 +141,21 @@ public class CreateWebAppAction extends NodeActionListener {
                 AzureUIRefreshCore.execute(new AzureUIRefreshEvent(AzureUIRefreshEvent.EventType.REFRESH, null));
             }
         });
+    }
+
+    private void notifyCreationSuccess(final WebApp app) {
+        final String title = message("webapp.create.task.success.notification.title");
+        final String message = String.format(message("webapp.create.task.success.notification.message"), app.name());
+        final Notification notification = new Notification(NOTIFICATION_GROUP_ID, title, message, NotificationType.INFORMATION);
+        Notifications.Bus.notify(notification);
+    }
+
+    private WebAppCreationDialog openDialog(final Project project, @Nullable WebAppConfig config) {
+        final WebAppCreationDialog dialog = new WebAppCreationDialog(project);
+        if (Objects.nonNull(config)) {
+            dialog.setData(config);
+        }
+        dialog.show();
+        return dialog;
     }
 }

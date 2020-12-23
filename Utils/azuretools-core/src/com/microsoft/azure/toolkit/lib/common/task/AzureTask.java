@@ -25,29 +25,42 @@ package com.microsoft.azure.toolkit.lib.common.task;
 import lombok.Builder;
 import lombok.Data;
 
-import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Data
-public class AzureTask {
+public class AzureTask<T> {
     private Modality modality;
-    private Runnable runnable;
+    private Supplier<T> supplier;
     private Object project;
     private boolean cancellable;
     @Builder.Default
     private boolean backgroundable = true;
     private boolean runningBackground = true;
     private String title;
-    private Runnable successListener;
-    private Runnable finishedListener;
-    private Consumer<Throwable> errorListener;
 
     public AzureTask(Runnable runnable) {
-        this.runnable = runnable;
+        this.supplier = () -> {
+            runnable.run();
+            return null;
+        };
+        this.modality = Modality.DEFAULT;
+    }
+
+    public AzureTask(Supplier<T> supplier) {
+        this.supplier = supplier;
         this.modality = Modality.DEFAULT;
     }
 
     public AzureTask(Runnable runnable, Modality modality) {
-        this.runnable = runnable;
+        this.supplier = () -> {
+            runnable.run();
+            return null;
+        };
+        this.modality = modality;
+    }
+
+    public AzureTask(Supplier<T> supplier, Modality modality) {
+        this.supplier = supplier;
         this.modality = modality;
     }
 
@@ -55,7 +68,18 @@ public class AzureTask {
         this.project = project;
         this.title = title;
         this.cancellable = cancellable;
-        this.runnable = runnable;
+        this.supplier = () -> {
+            runnable.run();
+            return null;
+        };
+        this.modality = Modality.DEFAULT;
+    }
+
+    public AzureTask(Object project, String title, boolean cancellable, Supplier<T> supplier) {
+        this.project = project;
+        this.title = title;
+        this.cancellable = cancellable;
+        this.supplier = supplier;
         this.modality = Modality.DEFAULT;
     }
 
@@ -63,7 +87,18 @@ public class AzureTask {
         this.project = project;
         this.title = title;
         this.cancellable = cancellable;
-        this.runnable = runnable;
+        this.supplier = () -> {
+            runnable.run();
+            return null;
+        };
+        this.modality = modality;
+    }
+
+    public AzureTask(Object project, String title, boolean cancellable, Supplier<T> supplier, Modality modality) {
+        this.project = project;
+        this.title = title;
+        this.cancellable = cancellable;
+        this.supplier = supplier;
         this.modality = modality;
     }
 
