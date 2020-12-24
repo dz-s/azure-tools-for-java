@@ -91,7 +91,7 @@ public abstract class AzureTaskManager {
         return this.runInObservable(this::doRunInModal, task);
     }
 
-    private <T> ConnectableObservable<T> runInObservable(final BiConsumer<Runnable, AzureTask<T>> consumer, final AzureTask<T> task) {
+    private <T> ConnectableObservable<T> runInObservable(final BiConsumer<? super Runnable, ? super AzureTask<T>> consumer, final AzureTask<T> task) {
         final ConnectableObservable<T> observable = Observable.create((Emitter<T> emitter) -> {
             consumer.accept(AzureOperationsContext.deriveClosure(() -> {
                 try {

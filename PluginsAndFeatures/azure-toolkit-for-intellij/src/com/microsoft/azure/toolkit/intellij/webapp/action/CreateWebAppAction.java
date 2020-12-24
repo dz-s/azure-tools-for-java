@@ -79,7 +79,11 @@ public class CreateWebAppAction extends NodeActionListener {
             !AzureLoginHelper.isAzureSubsAvailableOrReportError(message("common.error.signIn"))) {
             return;
         }
-        final WebAppCreationDialog dialog = this.openDialog(project, null);
+        this.openDialog(project, null);
+    }
+
+    private void openDialog(final Project project, @Nullable final WebAppConfig config) {
+        final WebAppCreationDialog dialog = this.createDialog(project, config);
         dialog.setOkActionListener((data) -> {
             DefaultLoader.getIdeHelper().invokeLater(dialog::close);
             this.createWebApp(data, project, dialog)
@@ -87,13 +91,13 @@ public class CreateWebAppAction extends NodeActionListener {
                     this.notifyCreationSuccess(webapp);
                     this.refreshAzureExplorer();
                 }, (error) -> {
-                    final AzureExceptionAction action = AzureExceptionAction.simple("Reopen Web App Creation Dialog", t -> {
-                        AzureTaskManager.getInstance().runLater(() -> openDialog(project, data));
-                    });
-                    final ProgressIndicator indicator = ProgressManager.getInstance().getProgressIndicator();
-                    AzureExceptionHandler.notify(error, !indicator.isModal(), action);
+                    final AzureExceptionAction action = AzureExceptionAction.simple(
+                        "Reopen Web App Creation Dialog",
+                        t -> AzureTaskManager.getInstance().runLater(() -> this.openDialog(project, config)));
+                    AzureExceptionHandler.notify(error, action);
                 });
         });
+        dialog.show();
     }
 
     @AzureOperation(value = "create web app", type = AzureOperation.Type.ACTION)
@@ -150,12 +154,11 @@ public class CreateWebAppAction extends NodeActionListener {
         Notifications.Bus.notify(notification);
     }
 
-    private WebAppCreationDialog openDialog(final Project project, @Nullable WebAppConfig config) {
+    private WebAppCreationDialog createDialog(final Project project, @Nullable WebAppConfig config) {
         final WebAppCreationDialog dialog = new WebAppCreationDialog(project);
         if (Objects.nonNull(config)) {
             dialog.setData(config);
         }
-        dialog.show();
         return dialog;
     }
 }
