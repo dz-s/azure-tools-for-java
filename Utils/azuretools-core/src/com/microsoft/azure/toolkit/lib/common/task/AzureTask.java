@@ -35,7 +35,6 @@ public class AzureTask<T> {
     private boolean cancellable;
     @Builder.Default
     private boolean backgroundable = true;
-    private boolean runningBackground = true;
     private String title;
 
     public AzureTask(Runnable runnable) {

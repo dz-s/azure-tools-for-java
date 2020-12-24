@@ -33,6 +33,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.registry.Registry;
 import com.microsoft.azure.toolkit.lib.common.task.AzureTask;
+import com.microsoft.azure.toolkit.lib.common.task.AzureTaskContext;
 import com.microsoft.azure.toolkit.lib.common.task.AzureTaskManager;
 import com.microsoft.azuretools.azurecommons.helpers.NotNull;
 
@@ -68,7 +69,7 @@ public class IntellijAzureTaskManager extends AzureTaskManager {
                 runnable.run();
             }
         };
-        task.setRunningBackground(true);
+        AzureTaskContext.current().setBackgrounded(true);
         ApplicationManager.getApplication().invokeLater(() -> ProgressManager.getInstance().run(backgroundTask), ModalityState.any());
     }
 
@@ -88,7 +89,7 @@ public class IntellijAzureTaskManager extends AzureTaskManager {
                 runnable.run();
             }
         };
-        task.setRunningBackground(false);
+        AzureTaskContext.current().setBackgrounded(false);
         ProgressManager.getInstance().run(modalTask);
     }
 
@@ -107,10 +108,10 @@ public class IntellijAzureTaskManager extends AzureTaskManager {
 
             @Override
             public void processSentToBackground() {
-                task.setRunningBackground(true);
+                AzureTaskContext.current().setBackgrounded(true);
             }
         };
-        task.setRunningBackground(false);
+        AzureTaskContext.current().setBackgrounded(false);
         ProgressManager.getInstance().run(modalTask);
     }
 
